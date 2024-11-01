@@ -63,7 +63,7 @@ Major companies like Netflix, Capital One, NASA, and Google use IaC and tools li
 
 ## Important Things to Know
 
-* Utilise **Playbooks** to run multiple tasks on target nodes. These playbook files use the YAML structure. It use a declarative approach meaning we declare the state and Ansible leverage the correct commands and format to achive the desired state.
+* Utilise **Playbooks** to run multiple tasks on target nodes. These playbook files use the YAML structure. Ansible uses a declarative approach meaning we declare the state and Ansible will leverage the correct commands and format to achieve the desired state.
 * **Linux** isn't item potent meaning that if you **run and re-run scripts you don't always get the same result**.** Ansible modules** on the other hand **provide item potensy, making it best practice to utilise Ansible modules**.
 * **Target nodes** do not need to be on the same **OS** as the **Controller**.
 * **Ansible** does **not** need to be **installed** on **Target nodes**.
