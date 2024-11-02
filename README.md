@@ -158,7 +158,7 @@ ansible web -a "uname -a"
 Use copy module to do it, rather than ad hoc command
 
 ```bash
-ansible web -m ansible.builtin.copy -a "src=~/test.txt dest=~/test.txt"
+ansible web -m ansible.builtin.copy -a "src=~/test.txt dest=~/test.txt mode 0400"
 ```
 
 ### Task: Create playbook to provision app VM
@@ -187,46 +187,37 @@ sudo nano prov_app_with_npm_start.yml
   # Give sudo previlleges
   become: true
 
-  # Do not get comprehensive facts on the hosts / devices (Makes it faster)
-  gather_facts: no
+  # Get comprehensive facts on the hosts / devices
+  gather_facts: yes
 
   tasks:
     # Add NodeSource repository for Node.js 20.x
-    - name: Add NodeSource repository for Node.js 20.x
-      ansible.builtin.apt_key:
-        url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-        state: present
+    - name: Run NodeSource setup script for Node.js 20.x
+      ansible.builtin.shell: "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
 
-    
-    - name: Add NodeSource APT repository
-      ansible.builtin.apt_repository:
-        repo: 'deb https://deb.nodesource.com/node_20.x {{ ansible_distribution_release }} main'
-        state: present
-
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
-
-    # Install NodeJS 20.x
     - name: Install NodeJS 20
       ansible.builtin.apt:
         name: nodejs
         state: present
-      tags: install_node
+
+    - name: Install npm explicitly
+      ansible.builtin.apt:
+        name: npm
+        state: present
 
     - name: Clone the app repository to the control node
       delegate_to: localhost
       ansible.builtin.git:
         repo: 'https://github.com/AdonisAlgos/tech264-sparta-app.git'
-        dest: /home/ubuntu/app
+        dest: /home/ubuntu/repo
         version: main
       tags: clone_app
 
     # Copy the 'app' folder to the target node
     - name: Copy app folder to target node
       ansible.builtin.copy:
-        src: /home/ubuntu/app/
-        dest: /home/ubuntu/app/
+        src: /home/ubuntu/repo/
+        dest: /home/ubuntu/
         mode: '0755'
       tags: copy_app
 
@@ -243,6 +234,7 @@ sudo nano prov_app_with_npm_start.yml
         cmd: npm start
         chdir: /home/ubuntu/app
       tags: npm_start
+
 ```
 
 #### Stage 2: Make an updated version of prov_app_with_npm_start.yml named prov_app_with_pm2.yml (or similar)
@@ -263,68 +255,57 @@ sudo nano prov_app_with_pm2.yml
 
 ```bash
 ---
-- name: Provision NodeJS application with pm2
+- name: Provision NodeJS application with npm start
   hosts: web
+
+  # Give sudo previlleges
   become: true
-  gather_facts: no
+
+  # Get comprehensive facts on the hosts / devices
+  gather_facts: yes
 
   tasks:
     # Add NodeSource repository for Node.js 20.x
-    - name: Add NodeSource repository for Node.js 20.x
-      ansible.builtin.apt_key:
-        url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-        state: present
+    - name: Run NodeSource setup script for Node.js 20.x
+      ansible.builtin.shell: "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
 
-    
-    - name: Add NodeSource APT repository
-      ansible.builtin.apt_repository:
-        repo: 'deb https://deb.nodesource.com/node_20.x {{ ansible_distribution_release }} main'
-        state: present
-
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
-
-    # Install NodeJS 20.x
     - name: Install NodeJS 20
       ansible.builtin.apt:
         name: nodejs
         state: present
-      tags: install_node
+
+    - name: Install npm explicitly
+      ansible.builtin.apt:
+        name: npm
+        state: present
 
     - name: Clone the app repository to the control node
       delegate_to: localhost
       ansible.builtin.git:
         repo: 'https://github.com/AdonisAlgos/tech264-sparta-app.git'
-        dest: /home/ubuntu/app
+        dest: /home/ubuntu/repo
         version: main
       tags: clone_app
 
     # Copy the 'app' folder to the target node
     - name: Copy app folder to target node
       ansible.builtin.copy:
-        src: /home/ubuntu/app/
-        dest: /home/ubuntu/app/
+        src: /home/ubuntu/repo/
+        dest: /home/ubuntu/
         mode: '0755'
       tags: copy_app
 
-    # Install dependencies with npm
+    # Navigate to the app folder and do npm install
     - name: Install dependencies with npm
       ansible.builtin.shell:
         cmd: npm install
         chdir: /home/ubuntu/app
       tags: npm_install
 
-    # Install pm2 globally
-    - name: Install pm2 globally
+    # Navigate to the app folder and do npm start
+    - name: Start the application with npm start
       ansible.builtin.shell:
-        cmd: npm install -g pm2
-      tags: install_pm2
-
-    # Start the application with pm2
-    - name: Start the application with pm2
-      ansible.builtin.shell:
-        cmd: pm2 start app.js --name my_app
+        cmd: npm start
         chdir: /home/ubuntu/app
-      tags: pm2_start
+      tags: npm_start
 ```
