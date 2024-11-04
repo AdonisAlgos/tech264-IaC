@@ -1,0 +1,50 @@
+---
+# playbook to provision the database
+- name: Provision MongoDB
+  # where to install the db
+  hosts: db
+  gather_facts: yes
+  become: true
+  tasks:
+
+  # Download the key
+  - name: Import the MongoDB public key
+    ansible.builtin.apt_key:
+      url: https://www.mongodb.org/static/pgp/server-7.0.asc
+      state: present
+
+  # Add MongoDB's official repository to the system's package sources.
+  - name: Add the MongoDB repository
+    ansible.builtin.apt_repository:
+      repo: "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/7.0 multiverse"
+      state: present
+      update_cache: yes
+  
+  # install mongodb
+  - name: Install MongoDB 7.0.6
+    ansible.builtin.apt:
+      name: mongodb-org=7.0.6
+      state: present
+      update_cache: yes
+
+  # Starting and enabling mongodb
+  - name: Ensure MongoDB service is started and enabled
+    service:
+      name: mongod
+      state: started
+      enabled: yes
+
+  # modify MongoDB configuration to allow remote connections
+  - name: Configure MongoDB to allow remote connections
+    ansible.builtin.lineinfile:
+      path: /etc/mongod.conf
+      regexp: '^  bindIp:.*'
+      line: '  bindIp: 0.0.0.0'
+      state: present
+
+  # restart MongoDB service to apply changes
+  - name: Restart MongoDB to apply configuration changes
+    service:
+      name: mongod
+      state: restarted
+      

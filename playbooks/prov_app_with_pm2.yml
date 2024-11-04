@@ -1,0 +1,62 @@
+---
+- name: Provision NodeJS application pm2
+  hosts: web
+
+  # Give sudo previlleges
+  become: true
+
+  # Get comprehensive facts on the hosts / devices
+  gather_facts: yes
+
+  tasks:
+    # Add NodeSource repository for Node.js 20.x
+    - name: Run NodeSource setup script for Node.js 20.x
+      ansible.builtin.shell: "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
+
+    - name: Install NodeJS 20
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+
+    - name: Clone the app repository to the control node
+      delegate_to: localhost
+      ansible.builtin.git:
+        repo: 'https://github.com/AdonisAlgos/tech264-sparta-app.git'
+        dest: /home/ubuntu/repo
+        version: main
+      tags: clone_app
+
+    # Copy the 'app' folder to the target node
+    - name: Copy app folder to target node
+      ansible.builtin.copy:
+        src: /home/ubuntu/repo/
+        dest: /home/ubuntu/
+        mode: '0755'
+      tags: copy_app
+
+    # Install dependencies with npm
+    - name: Install dependencies with npm
+      ansible.builtin.shell:
+        cmd: npm install
+        chdir: /home/ubuntu/app
+      tags: npm_install
+
+    # Install pm2 globally
+    - name: Install pm2 globally
+      ansible.builtin.shell:
+        cmd: npm install -g pm2
+      tags: install_pm2
+
+    # Stop pm2 processes
+    - name: Stop all processes running on pm2
+      ansible.builtin.shell:
+        cmd: pm2 stop all
+        chdir: /home/ubuntu/app
+      tags: pm2_stop
+
+    # Start the application with pm2
+    - name: Start the application with pm2
+      ansible.builtin.shell:
+        cmd: pm2 start app.js
+        chdir: /home/ubuntu/app
+      tags: pm2_start

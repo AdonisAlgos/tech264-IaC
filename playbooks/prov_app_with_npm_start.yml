@@ -1,0 +1,49 @@
+---
+- name: Provision NodeJS application with npm start
+  hosts: web
+
+  # Give sudo previlleges
+  become: true
+
+  # Get comprehensive facts on the hosts / devices
+  gather_facts: yes
+
+  tasks:
+    # Add NodeSource repository for Node.js 20.x
+    - name: Run NodeSource setup script for Node.js 20.x
+      ansible.builtin.shell: "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
+
+    - name: Install NodeJS 20
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+
+    - name: Clone the app repository to the control node
+      delegate_to: localhost
+      ansible.builtin.git:
+        repo: 'https://github.com/AdonisAlgos/tech264-sparta-app.git'
+        dest: /home/ubuntu/repo
+        version: main
+      tags: clone_app
+
+    # Copy the 'app' folder to the target node
+    - name: Copy app folder to target node
+      ansible.builtin.copy:
+        src: /home/ubuntu/repo/
+        dest: /home/ubuntu/
+        mode: '0755'
+      tags: copy_app
+
+    # Navigate to the app folder and do npm install
+    - name: Install dependencies with npm
+      ansible.builtin.shell:
+        cmd: npm install
+        chdir: /home/ubuntu/app
+      tags: npm_install
+
+    # Navigate to the app folder and do npm start
+    - name: Start the application with npm start
+      ansible.builtin.shell:
+        cmd: npm start
+        chdir: /home/ubuntu/app
+      tags: npm_start

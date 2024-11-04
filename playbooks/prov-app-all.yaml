@@ -1,0 +1,121 @@
+---
+# playbook to provision the database
+- name: Provision MongoDB
+  # where to install the db
+  hosts: db
+  gather_facts: yes
+  become: true
+  tasks:
+
+  # Download the key
+  - name: Import the MongoDB public key
+    ansible.builtin.apt_key:
+      url: https://www.mongodb.org/static/pgp/server-7.0.asc
+      state: present
+
+  # Add MongoDB's official repository to the system's package sources.
+  - name: Add the MongoDB repository
+    ansible.builtin.apt_repository:
+      repo: "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/7.0 multiverse"
+      state: present
+      update_cache: yes
+
+  # install mongodb
+  - name: Install MongoDB 7.0.6
+    ansible.builtin.apt:
+      name: mongodb-org=7.0.6
+      state: present
+      update_cache: yes
+
+  # Starting and enabling mongodb
+  - name: Ensure MongoDB service is started and enabled
+    service:
+      name: mongod
+      state: started
+      enabled: yes
+
+  # Modify MongoDB configuration to allow remote connections
+  - name: Configure MongoDB to allow remote connections
+    ansible.builtin.lineinfile:
+      path: /etc/mongod.conf
+      regexp: '^  bindIp:.*'
+      line: '  bindIp: 0.0.0.0'
+      state: present
+
+  # Restart MongoDB service to apply changes
+  - name: Restart MongoDB to apply configuration changes
+    service:
+      name: mongod
+      state: restarted
+
+- name: Provision NodeJS application pm2
+  hosts: web
+
+  # Give sudo previlleges
+  become: true
+
+  # Get comprehensive facts on the hosts / devices
+  gather_facts: yes
+
+  # Retrieving the db's private ip through gather facts
+  vars:
+    db_host_ip: "{{ hostvars[groups['db'][0]]['ansible_default_ipv4']['address'] }}"
+
+  tasks:
+    # Add NodeSource repository for Node.js 20.x
+    - name: Run NodeSource setup script for Node.js 20.x
+      ansible.builtin.shell: "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
+
+    - name: Install NodeJS 20
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+
+    - name: Clone the app repository to the control node
+      delegate_to: localhost
+      ansible.builtin.git:
+        repo: 'https://github.com/AdonisAlgos/tech264-sparta-app.git'
+        dest: /home/ubuntu/repo
+        version: main
+      tags: clone_app
+
+    # Copy the 'app' folder to the target node
+    - name: Copy app folder to target node
+      ansible.builtin.copy:
+        src: /home/ubuntu/repo/
+        dest: /home/ubuntu/
+        mode: '0755'
+      tags: copy_app
+
+    - name: Add DB_HOST environment variable to /etc/environment (persistent)
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        line: 'DB_HOST=mongodb://{{ db_host_ip }}:27017/posts'
+        state: present
+
+    # Install dependencies with npm
+    - name: Install dependencies with npm
+      ansible.builtin.shell:
+        cmd: npm install
+        chdir: /home/ubuntu/app
+      tags: npm_install
+
+    # Install pm2 globally
+    - name: Install pm2 globally
+      ansible.builtin.shell:
+        cmd: npm install -g pm2
+      tags: install_pm2
+
+    # Stop pm2 processes
+    - name: Stop all processes running on pm2
+      ansible.builtin.shell:
+        cmd: pm2 stop all
+        chdir: /home/ubuntu/app
+      tags: pm2_stop
+
+    # Start the application with pm2
+    - name: Start the application with pm2
+      ansible.builtin.shell:
+        cmd: pm2 start app.js
+        chdir: /home/ubuntu/app
+      tags: pm2_start
